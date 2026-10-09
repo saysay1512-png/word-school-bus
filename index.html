@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>단어 스쿨버스</title>
+<meta name="description" content="미국 유치원~12학년 필수 영어 단어를 게임으로 외워요. 틀린 단어는 맞힐 때까지 다시 나옵니다.">
+<meta name="theme-color" content="#edf2f9" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#14221d" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="단어 스쿨버스">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Andika:wght@400;700&family=Gothic+A1:wght@400;500;700&family=Jua&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <symbol id="bus" viewBox="0 0 64 36">
+    <path d="M4 7h43c5 0 9 3 11 8l3 6c1 1 1 2 1 3v3H2V9c0-1 1-2 2-2z" fill="var(--bus)"/>
+    <rect x="2" y="19" width="60" height="2.4" fill="var(--bus-ink)"/>
+    <rect x="6" y="10" width="8" height="7" rx="1.5" fill="var(--glass)"/>
+    <rect x="16" y="10" width="8" height="7" rx="1.5" fill="var(--glass)"/>
+    <rect x="26" y="10" width="8" height="7" rx="1.5" fill="var(--glass)"/>
+    <rect x="36" y="10" width="8" height="7" rx="1.5" fill="var(--glass)"/>
+    <path d="M47 10h2c3 0 5 2 6 5l1 2h-9z" fill="var(--glass)"/>
+    <circle cx="15" cy="28" r="6" fill="var(--wheel)"/><circle cx="15" cy="28" r="2.4" fill="var(--road-mark)"/>
+    <circle cx="48" cy="28" r="6" fill="var(--wheel)"/><circle cx="48" cy="28" r="2.4" fill="var(--road-mark)"/>
+  </symbol>
+  <symbol id="school" viewBox="0 0 30 34">
+    <rect x="14" y="1" width="1.6" height="12" fill="var(--ink)"/>
+    <path d="M15.6 1.5l8 2.6-8 2.6z" fill="var(--bus)"/>
+    <path d="M2 18L15 9l13 9z" fill="var(--margin)"/>
+    <rect x="4" y="18" width="22" height="15" fill="var(--margin)"/>
+    <rect x="12" y="23" width="6" height="10" fill="var(--surface)"/>
+    <rect x="6" y="21" width="4" height="4" fill="var(--surface)"/>
+    <rect x="20" y="21" width="4" height="4" fill="var(--surface)"/>
+  </symbol>
+  <symbol id="spk" viewBox="0 0 24 24">
+    <path d="M4 9h3.5L12 5v14l-4.5-4H4z" fill="currentColor"/>
+    <path d="M15 9.2a4 4 0 010 5.6M17.4 6.6a7.6 7.6 0 010 10.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+  </symbol>
+</svg>
+
+<div class="app">
+
+  <section class="screen" id="home">
+    <header class="hd">
+      <svg class="hd-bus" aria-hidden="true"><use href="#bus"/></svg>
+      <div>
+        <h1>단어 스쿨버스</h1>
+        <p id="homeSub">미국 학년별 필수 영어 단어. 틀린 단어는 맞힐 때까지 다시 나와요.</p>
+      </div>
+    </header>
+    <div class="opts">
+      <div class="opt"><span id="lblRate">읽기 속도</span>
+        <div class="seg" role="group" aria-labelledby="lblRate">
+          <button type="button" id="rateSlow" aria-pressed="false">느리게</button>
+          <button type="button" id="rateNormal" aria-pressed="true">보통</button>
+        </div>
+      </div>
+      <div class="opt"><span id="lblSfx">효과음</span>
+        <div class="seg" role="group" aria-labelledby="lblSfx">
+          <button type="button" id="sfxOn" aria-pressed="true">켜기</button>
+          <button type="button" id="sfxOff" aria-pressed="false">끄기</button>
+        </div>
+      </div>
+    </div>
+    <div class="screen" id="grades"></div>
+    <p class="foot" id="homeFoot"></p>
+  </section>
+
+  <section class="screen" id="play" hidden>
+    <div class="bar">
+      <button type="button" class="ghost" id="quitBtn">그만하기</button>
+      <span class="where" id="where"></span>
+      <span class="count" id="count" aria-label="맞힌 단어 수"></span>
+    </div>
+    <div class="quit" id="quitBar" hidden>
+      <span>지금 나가면 이번 판 기록이 사라져요.</span>
+      <div>
+        <button type="button" class="ghost" id="quitNo">계속하기</button>
+        <button type="button" class="primary" id="quitYes">나가기</button>
+      </div>
+    </div>
+    <div class="route" aria-hidden="true">
+      <div class="road"></div>
+      <svg class="school"><use href="#school"/></svg>
+      <svg class="bus" id="busMark"><use href="#bus"/></svg>
+    </div>
+    <div class="tally">
+      <span>남은 단어 <b id="left">0</b></span>
+      <span>다시 나올 단어 <b id="again">0</b></span>
+    </div>
+    <div class="card">
+      <svg class="word-svg" id="wordSvg" viewBox="0 0 360 124" role="img" aria-label="">
+        <line class="ln top" x1="-4000" x2="5000" y1="33" y2="33"/>
+        <line class="ln mid" x1="-4000" x2="5000" y1="50.5" y2="50.5"/>
+        <line class="ln base" x1="-4000" x2="5000" y1="88" y2="88"/>
+        <text id="wordText" x="180" y="88" text-anchor="middle"></text>
+      </svg>
+      <button type="button" class="listen" id="listenBtn"><svg aria-hidden="true"><use href="#spk"/></svg>다시 듣기</button>
+      <p class="novoice" id="noVoice" hidden>이 브라우저는 음성 읽기를 지원하지 않아 소리가 나지 않아요.</p>
+    </div>
+    <div class="answers" id="answers"></div>
+    <div class="fb">
+      <p class="fb-msg" id="fbMsg" aria-live="polite"></p>
+      <button type="button" class="primary" id="nextBtn" hidden>다음 단어</button>
+    </div>
+    <p class="keys">키보드 1~4로 답하고, R로 다시 듣고, Enter로 넘어가요.</p>
+  </section>
+
+  <section class="screen" id="done" hidden>
+    <div class="route" aria-hidden="true" style="--p:1">
+      <div class="road"></div>
+      <svg class="school"><use href="#school"/></svg>
+      <svg class="bus"><use href="#bus"/></svg>
+    </div>
+    <header class="done-hd">
+      <h1 id="doneTitle">학교 도착!</h1>
+      <p id="doneSub"></p>
+    </header>
+    <div class="stats">
+      <div class="stat"><b id="stFirst">0</b><span>한 번에 맞힌 단어</span></div>
+      <div class="stat"><b id="stTries">0</b><span>답한 횟수</span></div>
+      <div class="stat"><b id="stBest">0</b><span id="stBestLbl">이 단계 최고 기록</span></div>
+    </div>
+    <div class="missed" id="missed" hidden>
+      <h2>틀렸던 단어 (누르면 다시 읽어 줘요)</h2>
+      <ul id="missedList"></ul>
+    </div>
+    <div class="actions">
+      <button type="button" class="primary" id="againBtn">새 단어로 다시 하기</button>
+      <button type="button" class="ghost" id="reviewBtn" hidden>틀렸던 단어만 다시 하기</button>
+      <button type="button" class="ghost" id="homeBtn">단계 고르기</button>
+    </div>
+  </section>
+
+</div>
+
+<script src="words.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
