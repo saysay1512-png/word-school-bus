@@ -57,6 +57,12 @@
         <p id="homeSub">미국 학년별 필수 영어 단어. 틀린 단어는 맞힐 때까지 다시 나와요.</p>
       </div>
     </header>
+    <div class="tabs" role="tablist" aria-label="메뉴" id="tabs">
+      <button type="button" role="tab" id="tabGame" data-tab="game" aria-selected="true">게임</button>
+      <button type="button" role="tab" id="tabStudy" data-tab="study" aria-selected="false">외우기</button>
+      <button type="button" role="tab" id="tabNotes" data-tab="notes" aria-selected="false">오답 정리<span class="badge" id="notesBadge" hidden></span></button>
+    </div>
+    <p class="tab-hint" id="tabHint"></p>
     <div class="opts">
       <div class="opt"><span id="lblRate">읽기 속도</span>
         <div class="seg" role="group" aria-labelledby="lblRate">
@@ -72,7 +78,55 @@
       </div>
     </div>
     <div class="screen" id="grades"></div>
+    <div class="screen" id="notesBox" hidden></div>
     <p class="foot" id="homeFoot"></p>
+  </section>
+
+  <section class="screen" id="pick" hidden>
+    <div class="bar">
+      <button type="button" class="ghost" id="pickBack">뒤로</button>
+      <span class="where" id="pickWhere"></span>
+    </div>
+    <header class="done-hd">
+      <h1>몇 개 외울까요?</h1>
+      <p id="pickSub"></p>
+    </header>
+    <div class="counts" id="counts"></div>
+  </section>
+
+  <section class="screen" id="cards" hidden>
+    <div class="bar">
+      <button type="button" class="ghost" id="cardsQuit">그만하기</button>
+      <span class="where" id="cardsWhere"></span>
+      <span class="count" id="cardsCount"></span>
+    </div>
+    <button type="button" class="flip" id="flip" aria-pressed="false">
+      <span class="flip-in">
+        <span class="face front"><span class="cw" id="cardWord"></span><span class="hint">눌러서 뜻 보기</span></span>
+        <span class="face back"><span class="cw" id="cardWord2"></span><span class="cm" id="cardMean"></span><span class="hint" id="cardNote"></span></span>
+      </span>
+    </button>
+    <div class="card-tools">
+      <button type="button" class="listen" id="cardListen"><svg aria-hidden="true"><use href="#spk"/></svg>다시 듣기</button>
+      <button type="button" class="ghost forget" id="cardForget" aria-pressed="false" hidden></button>
+    </div>
+    <div class="card-nav">
+      <button type="button" class="ghost" id="cardPrev">이전</button>
+      <button type="button" class="primary" id="cardNext">다음</button>
+    </div>
+    <p class="keys">스페이스로 뒤집고, ←/→로 넘기고, R로 다시 들어요.</p>
+  </section>
+
+  <section class="screen" id="cardsDone" hidden>
+    <header class="done-hd">
+      <h1 id="cdTitle">카드 끝!</h1>
+      <p id="cdSub"></p>
+    </header>
+    <div class="actions">
+      <button type="button" class="primary" id="cdGame">이 단어로 게임하기</button>
+      <button type="button" class="ghost" id="cdAgain">한 번 더 보기</button>
+      <button type="button" class="ghost" id="cdHome">단계 고르기</button>
+    </div>
   </section>
 
   <section class="screen" id="play" hidden>
@@ -133,6 +187,7 @@
     <div class="missed" id="missed" hidden>
       <h2>틀렸던 단어 (누르면 다시 읽어 줘요)</h2>
       <ul id="missedList"></ul>
+      <p class="foot">틀린 단어는 홈의 '오답 정리'에도 모여요.</p>
     </div>
     <div class="actions">
       <button type="button" class="primary" id="againBtn">새 단어로 다시 하기</button>

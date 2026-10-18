@@ -44,6 +44,19 @@ try { saved = JSON.parse(localStorage.getItem('wordbus.v1')) || {}; } catch(e){ 
 if (!saved.rec || typeof saved.rec !== 'object') saved.rec = {};
 function persist(){ try { localStorage.setItem('wordbus.v1', JSON.stringify(saved)); } catch(e){} }
 
+/* ---- wrong-word notes: word -> times missed, across all levels ---- */
+var INDEX = {}, HARD = 5;
+Object.keys(SETS).forEach(function(key){ SETS[key].forEach(function(w){ INDEX[w.w] = {key:key, i:w.i}; }); });
+if (!saved.wrong || typeof saved.wrong !== 'object') saved.wrong = {};
+function addWrong(word){ saved.wrong[word] = (saved.wrong[word] || 0) + 1; persist(); }
+function noteList(){
+  return Object.keys(saved.wrong).filter(function(w){ return INDEX[w] && saved.wrong[w] > 0; })
+    .map(function(w){ var r = INDEX[w], e = SETS[r.key][r.i]; return {w:w, m:e.m, i:e.i, key:r.key, n:saved.wrong[w]}; })
+    .sort(function(a,b){ return b.n - a.n || a.w.localeCompare(b.w); });
+}
+var TABS = ['game','study','notes'];
+var tab = TABS.indexOf(saved.tab) >= 0 ? saved.tab : 'game';
+
 /* ---- voice ---- */
 var synth = ('speechSynthesis' in window) ? window.speechSynthesis : null;
 var voice = null;
@@ -97,14 +110,28 @@ function sfx(name){
 }
 
 /* ---- screens ---- */
-var screen = 'home', game = null, last = null, timer = null;
+var screen = 'home', game = null, last = null, timer = null, deck = null, pickKey = null, undo = null;
 function show(name){
-  ['home','play','done'].forEach(function(id){ $(id).hidden = (id !== name); });
+  ['home','play','done','pick','cards','cardsDone'].forEach(function(id){ $(id).hidden = (id !== name); });
   screen = name;
   try { window.scrollTo(0,0); } catch(e){}
 }
 
+var HINTS = {
+  game: '단계를 고르면 단어 ' + ROUND + '개가 나와요. 틀린 단어는 맞힐 때까지 다시 나와요.',
+  study: '단계를 고르고 외울 단어 수를 정하면, 카드를 뒤집으며 뜻과 소리를 익혀요.',
+  notes: '게임에서 틀린 단어가 여기에 모여요. 다 외운 단어는 지워 주세요.'
+};
 function renderHome(){
+  Array.prototype.forEach.call($('tabs').children, function(b){ b.setAttribute('aria-selected', String(b.dataset.tab === tab)); });
+  var nc = noteList().length;
+  $('notesBadge').textContent = nc; $('notesBadge').hidden = !nc;
+  $('tabNotes').setAttribute('aria-label', '오답 정리, 단어 ' + nc + '개');
+  $('tabHint').textContent = HINTS[tab];
+  $('grades').hidden = tab === 'notes';
+  $('homeFoot').hidden = tab === 'notes';
+  $('notesBox').hidden = tab !== 'notes';
+  if (tab === 'notes') renderNotes();
   var box = $('grades'); box.textContent = '';
   GROUPS.forEach(function(grp, gi){
     var sec = document.createElement('div'); sec.className = 'grp';
@@ -122,7 +149,7 @@ function renderHome(){
         var key = g[0] + '-' + (li+1), rec = saved.rec[key];
         var btn = document.createElement('button'); btn.type = 'button'; btn.className = 'lv' + (rec ? ' cleared' : '');
         btn.dataset.key = key;
-        btn.setAttribute('aria-label', g[1] + ' 난이도 ' + name + ', 단어 ' + SETS[key].length + '개' + (rec ? ', 성공함' : ''));
+        btn.setAttribute('aria-label', g[1] + ' 난이도 ' + name + (tab === 'study' ? ' 외우기' : '') + ', 단어 ' + SETS[key].length + '개' + (rec ? ', 성공함' : ''));
         var t = document.createElement('span'); t.textContent = name; btn.appendChild(t);
         if (rec){ var st = document.createElement('span'); st.className = 'st'; st.textContent = '★'; btn.appendChild(st); }
         lv.appendChild(btn);
@@ -136,6 +163,129 @@ function renderHome(){
   $('rateNormal').setAttribute('aria-pressed', String(!saved.slow));
   $('sfxOn').setAttribute('aria-pressed', String(saved.sfx !== false));
   $('sfxOff').setAttribute('aria-pressed', String(saved.sfx === false));
+}
+
+/* ---- wrong-word notes ---- */
+function renderNotes(){
+  var box = $('notesBox'); box.textContent = '';
+  var all = noteList();
+  if (undo){
+    var ub = document.createElement('div'); ub.className = 'undo';
+    var us = document.createElement('span'); us.textContent = '"' + undo.w + '"를 오답 정리에서 지웠어요.';
+    var ubt = document.createElement('button'); ubt.type = 'button'; ubt.className = 'ghost'; ubt.dataset.act = 'undo'; ubt.textContent = '되돌리기';
+    ub.appendChild(us); ub.appendChild(ubt); box.appendChild(ub);
+  }
+  [ {id:'low', title:'1~4번 틀린 단어', items:all.filter(function(x){ return x.n < HARD; })},
+    {id:'high', title:HARD + '번 이상 틀린 단어', items:all.filter(function(x){ return x.n >= HARD; })}
+  ].forEach(function(g){
+    var sec = document.createElement('div'); sec.className = 'ngrp';
+    var hd = document.createElement('div'); hd.className = 'ngrp-hd';
+    var h = document.createElement('h2'); h.textContent = g.title;
+    var sm = document.createElement('small'); sm.textContent = g.items.length + '개'; h.appendChild(sm);
+    var sb = document.createElement('button'); sb.type = 'button'; sb.className = 'ghost';
+    sb.dataset.act = 'study'; sb.dataset.grp = g.id; sb.textContent = '카드로 외우기'; sb.disabled = !g.items.length;
+    hd.appendChild(h); hd.appendChild(sb);
+    var ul = document.createElement('ul'); ul.className = 'nlist';
+    if (!g.items.length){
+      var e = document.createElement('li'); e.className = 'none'; e.textContent = '아직 없어요.'; ul.appendChild(e);
+    }
+    g.items.forEach(function(x){
+      var li = document.createElement('li');
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'say'; b.dataset.w = x.w;
+      var w = document.createElement('span'); w.className = 'w'; w.textContent = x.w;
+      var m = document.createElement('span'); m.className = 'm'; m.textContent = x.m;
+      var n = document.createElement('span'); n.className = 'x'; n.textContent = x.n + '번 틀림 · ' + labelOf(x.key);
+      b.appendChild(w); b.appendChild(m); b.appendChild(n);
+      var d = document.createElement('button'); d.type = 'button'; d.className = 'del'; d.dataset.w = x.w;
+      d.textContent = '지우기'; d.setAttribute('aria-label', x.w + ' 오답 정리에서 지우기');
+      li.appendChild(b); li.appendChild(d); ul.appendChild(li);
+    });
+    sec.appendChild(hd); sec.appendChild(ul); box.appendChild(sec);
+  });
+}
+function studyNotes(grp){
+  var items = noteList().filter(function(x){ return grp === 'high' ? x.n >= HARD : x.n < HARD; });
+  if (!items.length) return;
+  startCards(shuffle(items).map(function(x){ return {w:x.w, m:x.m, i:x.i, key:x.key, n:x.n, gone:false}; }),
+    'notes', '오답 · ' + (grp === 'high' ? HARD + '번 이상' : '1~4번'), null);
+}
+
+/* ---- study: pick how many, then flip cards ---- */
+function openPick(key){
+  pickKey = key;
+  var n = SETS[key].length, box = $('counts'); box.textContent = '';
+  $('pickWhere').textContent = labelOf(key) + ' · 외우기';
+  $('pickSub').textContent = '이 단계 단어 ' + n + '개 중에서 무작위로 골라요.';
+  for (var c = 10; c <= n; c += 10){
+    var b = document.createElement('button'); b.type = 'button'; b.dataset.n = c; b.textContent = c;
+    var s = document.createElement('small'); s.textContent = '단어'; b.appendChild(s);
+    b.setAttribute('aria-label', '단어 ' + c + '개');
+    box.appendChild(b);
+  }
+  show('pick');
+}
+function startCards(cards, mode, title, key){
+  clearTimeout(timer);
+  deck = {mode:mode, key:key, title:title, cards:cards, pos:0, flipped:false};
+  $('cardsWhere').textContent = title;
+  show('cards');
+  renderCard();
+}
+function renderCard(){
+  var c = deck.cards[deck.pos];
+  $('cardsCount').textContent = (deck.pos + 1) + ' / ' + deck.cards.length;
+  setFlip(false, true);
+  $('cardWord').textContent = c.w; $('cardWord2').textContent = c.w; $('cardMean').textContent = c.m;
+  $('cardNote').textContent = deck.mode === 'notes' ? c.n + '번 틀린 단어' : '';
+  $('cardForget').hidden = deck.mode !== 'notes';
+  paintForget();
+  $('cardPrev').disabled = deck.pos === 0;
+  $('cardNext').textContent = deck.pos === deck.cards.length - 1 ? '다 봤어요' : '다음';
+  try { $('flip').focus({preventScroll:true}); } catch(e){}
+}
+function setFlip(on, instant){
+  var c = deck.cards[deck.pos], f = $('flip');
+  deck.flipped = on;
+  if (instant) f.classList.add('instant');
+  f.setAttribute('aria-pressed', String(on));
+  f.setAttribute('aria-label', on ? c.w + ', 뜻: ' + c.m : '영어 단어 ' + c.w + '. 눌러서 뜻 보기');
+  if (instant){ void f.offsetWidth; f.classList.remove('instant'); }
+}
+function flipCard(){
+  if (!deck) return;
+  setFlip(!deck.flipped);
+  if (deck.flipped) speak(deck.cards[deck.pos].w);
+}
+function paintForget(){
+  var c = deck.cards[deck.pos], b = $('cardForget');
+  b.setAttribute('aria-pressed', String(!!c.gone));
+  b.textContent = c.gone ? '지웠어요 · 되돌리기' : '다 외웠어요 · 오답에서 지우기';
+}
+function toggleForget(){
+  var c = deck.cards[deck.pos];
+  if (c.gone){ saved.wrong[c.w] = c.n; c.gone = false; }
+  else { delete saved.wrong[c.w]; c.gone = true; }
+  persist(); paintForget();
+}
+function nextCard(){
+  if (!deck) return;
+  if (deck.pos < deck.cards.length - 1){ deck.pos++; renderCard(); }
+  else finishCards();
+}
+function prevCard(){
+  if (deck && deck.pos > 0){ deck.pos--; renderCard(); }
+}
+function finishCards(){
+  if (synth) { try { synth.cancel(); } catch(e){} }
+  var d = deck, gone = d.cards.filter(function(c){ return c.gone; }).length, left = d.cards.length - gone;
+  $('cdTitle').textContent = '카드 끝!';
+  $('cdSub').textContent = d.title + ' · 단어 ' + d.cards.length + '개를 다 봤어요.' +
+    (d.mode === 'notes' ? (gone ? ' 그중 ' + gone + '개를 오답 정리에서 지웠어요.' : '') : ' 이제 게임으로 확인해 보세요.');
+  $('cdGame').hidden = d.mode !== 'level';
+  $('cdAgain').hidden = !left;
+  $('cdHome').textContent = d.mode === 'notes' ? '오답 정리로' : '단계 고르기';
+  show('cardsDone');
+  sfx('win');
 }
 
 /* ---- game ---- */
@@ -154,13 +304,16 @@ function pickDistractors(set, w){
   return out;
 }
 
-function startGame(key, only){
+// only: word indexes for a short round (review of missed words, or words just studied); not recorded.
+var TAGS = { review:['복습','복습 끝!'], learn:['외운 단어','확인 끝!'] };
+function tagOf(g){ return TAGS[g.tag] || TAGS.review; }
+function startGame(key, only, tag){
   var set = SETS[key];
   var pool = only ? only.slice() : shuffle(set.map(function(w){ return w.i; })).slice(0, ROUND);
   game = { key:key, total:pool.length, queue:shuffle(pool), cur:null, opts:null, answered:false, picked:null,
-           attempts:0, miss:{}, mastered:0, review:!!only };
+           attempts:0, miss:{}, mastered:0, review:!!only, tag:tag || 'review' };
   $('quitBar').hidden = true;
-  $('where').textContent = labelOf(key) + (only ? ' · 복습' : '');
+  $('where').textContent = labelOf(key) + (only ? ' · ' + tagOf(game)[0] : '');
   $('noVoice').hidden = !!synth;
   show('play');
   nextQuestion();
@@ -235,6 +388,7 @@ function answer(j){
     timer = setTimeout(nextQuestion, 800);
   } else {
     game.miss[game.cur] = (game.miss[game.cur] || 0) + 1;
+    addWrong(w.w);
     var len = game.queue.length, lo = Math.min(3, len);
     game.queue.splice(lo + Math.floor(Math.random() * (len - lo + 1)), 0, game.cur);
     sfx('no');
@@ -257,7 +411,7 @@ function finish(){
     saved.rec[game.key] = rec; persist();
     best = rec.best;
   }
-  last = { key:game.key, total:game.total, attempts:game.attempts, missed:missed, review:game.review, best:best };
+  last = { key:game.key, total:game.total, attempts:game.attempts, missed:missed, review:game.review, tag:game.tag, best:best };
   game = null;
   renderDone();
   show('done');
@@ -266,12 +420,12 @@ function finish(){
 
 function renderDone(){
   var set = SETS[last.key];
-  $('doneTitle').textContent = last.review ? '복습 끝!' : '학교 도착!';
+  $('doneTitle').textContent = last.review ? tagOf(last)[1] : '학교 도착!';
   $('doneSub').textContent = labelOf(last.key) + ' · 단어 ' + last.total + '개를 모두 맞혔어요.';
   $('stFirst').textContent = (last.total - last.missed.length) + ' / ' + last.total;
   $('stTries').textContent = last.attempts + '번';
   $('stBest').textContent = last.best == null ? '-' : last.best + '번';
-  $('stBestLbl').textContent = last.review ? '복습은 기록에 넣지 않아요' : '이 단계 최고 기록 (적을수록 좋아요)';
+  $('stBestLbl').textContent = last.review ? tagOf(last)[0] + ' 판은 기록에 넣지 않아요' : '이 단계 최고 기록 (적을수록 좋아요)';
   var ul = $('missedList'); ul.textContent = '';
   last.missed.forEach(function(x){
     var li = document.createElement('li'), b = document.createElement('button'); b.type = 'button'; b.dataset.w = set[x.i].w;
@@ -286,8 +440,43 @@ function renderDone(){
 
 /* ---- events ---- */
 $('grades').addEventListener('click', function(e){
-  var b = e.target.closest('.lv'); if (b) startGame(b.dataset.key);
+  var b = e.target.closest('.lv'); if (!b) return;
+  if (tab === 'study') openPick(b.dataset.key); else startGame(b.dataset.key);
 });
+$('tabs').addEventListener('click', function(e){
+  var b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === tab) return;
+  tab = b.dataset.tab; saved.tab = tab; persist(); undo = null; renderHome();
+});
+$('notesBox').addEventListener('click', function(e){
+  var b = e.target.closest('button'); if (!b) return;
+  if (b.classList.contains('say')) speak(b.dataset.w);
+  else if (b.classList.contains('del')){
+    undo = {w:b.dataset.w, n:saved.wrong[b.dataset.w]};
+    delete saved.wrong[b.dataset.w]; persist(); renderHome();
+  }
+  else if (b.dataset.act === 'undo' && undo){ saved.wrong[undo.w] = undo.n; undo = null; persist(); renderHome(); }
+  else if (b.dataset.act === 'study') studyNotes(b.dataset.grp);
+});
+$('pickBack').addEventListener('click', goHome);
+$('counts').addEventListener('click', function(e){
+  var b = e.target.closest('button'); if (!b || !pickKey) return;
+  var key = pickKey;
+  startCards(shuffle(SETS[key].slice()).slice(0, +b.dataset.n).map(function(x){ return {w:x.w, m:x.m, i:x.i, key:key, n:0, gone:false}; }),
+    'level', labelOf(key) + ' · 외우기', key);
+});
+$('flip').addEventListener('click', flipCard);
+$('cardListen').addEventListener('click', function(){ if (deck) speak(deck.cards[deck.pos].w); });
+$('cardForget').addEventListener('click', toggleForget);
+$('cardPrev').addEventListener('click', prevCard);
+$('cardNext').addEventListener('click', nextCard);
+$('cardsQuit').addEventListener('click', goHome);
+$('cdGame').addEventListener('click', function(){ if (deck) startGame(deck.key, deck.cards.map(function(c){ return c.i; }), 'learn'); });
+$('cdAgain').addEventListener('click', function(){
+  if (!deck) return;
+  var cards = shuffle(deck.cards.filter(function(c){ return !c.gone; }));
+  if (cards.length) startCards(cards, deck.mode, deck.title, deck.key);
+});
+$('cdHome').addEventListener('click', goHome);
 $('answers').addEventListener('click', function(e){
   var b = e.target.closest('.ans'); if (b) answer(+b.dataset.j);
 });
@@ -308,7 +497,16 @@ $('rateNormal').addEventListener('click', function(){ saved.slow = false; persis
 $('sfxOn').addEventListener('click', function(){ saved.sfx = true; persist(); renderHome(); sfx('ok'); });
 $('sfxOff').addEventListener('click', function(){ saved.sfx = false; persist(); renderHome(); });
 document.addEventListener('keydown', function(e){
-  if (screen !== 'play' || !game || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  if (screen === 'cards' && deck){
+    var onBtn = e.target && e.target.tagName === 'BUTTON';
+    if ((e.key === ' ' || e.key === 'Enter') && !onBtn){ flipCard(); e.preventDefault(); }
+    else if (e.key === 'ArrowRight'){ nextCard(); e.preventDefault(); }
+    else if (e.key === 'ArrowLeft'){ prevCard(); e.preventDefault(); }
+    else if (e.key === 'r' || e.key === 'R'){ speak(deck.cards[deck.pos].w); }
+    return;
+  }
+  if (screen !== 'play' || !game) return;
   if (e.key >= '1' && e.key <= '4'){ answer(+e.key - 1); e.preventDefault(); }
   else if (e.key === 'r' || e.key === 'R'){ speak(SETS[game.key][game.cur].w); }
   else if (e.key === 'Enter' && game.answered && !$('nextBtn').hidden){ nextQuestion(); e.preventDefault(); }
@@ -317,7 +515,7 @@ document.addEventListener('keydown', function(e){
 function goHome(){
   clearTimeout(timer);
   if (synth) { try { synth.cancel(); } catch(e){} }
-  game = null;
+  game = null; deck = null; pickKey = null;
   renderHome();
   show('home');
 }
@@ -328,7 +526,7 @@ function start(data){
   try {
     if (data && data.screen === 'play' && data.game && SETS[data.game.key]){
       game = data.game;
-      $('where').textContent = labelOf(game.key) + (game.review ? ' · 복습' : '');
+      $('where').textContent = labelOf(game.key) + (game.review ? ' · ' + tagOf(game)[0] : '');
       $('noVoice').hidden = !!synth;
       show('play');
       if (game.answered && game.opts[game.picked] === game.cur) nextQuestion(); else renderQuestion();
