@@ -224,57 +224,83 @@ function openPick(key){
   }
   show('pick');
 }
+// Cards are shown PER at a time; deck.pos is the index of the first card on the page.
+var PER = 4;
 function startCards(cards, mode, title, key){
   clearTimeout(timer);
-  deck = {mode:mode, key:key, title:title, cards:cards, pos:0, flipped:false};
+  deck = {mode:mode, key:key, title:title, cards:cards, pos:0};
   $('cardsWhere').textContent = title;
   show('cards');
-  renderCard();
+  renderPage();
 }
-function renderCard(){
-  var c = deck.cards[deck.pos];
-  $('cardsCount').textContent = (deck.pos + 1) + ' / ' + deck.cards.length;
-  setFlip(false, true);
-  $('cardWord').textContent = c.w; $('cardWord2').textContent = c.w; $('cardMean').textContent = c.m;
-  $('cardNote').textContent = deck.mode === 'notes' ? c.n + '번 틀린 단어' : '';
-  $('cardForget').hidden = deck.mode !== 'notes';
-  paintForget();
-  $('cardPrev').disabled = deck.pos === 0;
-  $('cardNext').textContent = deck.pos === deck.cards.length - 1 ? '다 봤어요' : '다음';
-  try { $('flip').focus({preventScroll:true}); } catch(e){}
+function el(tag, cls, text){
+  var e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text != null) e.textContent = text;
+  return e;
 }
-function setFlip(on, instant){
-  var c = deck.cards[deck.pos], f = $('flip');
-  deck.flipped = on;
-  if (instant) f.classList.add('instant');
-  f.setAttribute('aria-pressed', String(on));
-  f.setAttribute('aria-label', on ? c.w + ', 뜻: ' + c.m : '영어 단어 ' + c.w + '. 눌러서 뜻 보기');
-  if (instant){ void f.offsetWidth; f.classList.remove('instant'); }
+function renderPage(){
+  var start = deck.pos, page = deck.cards.slice(start, start + PER), end = start + page.length;
+  $('cardsCount').textContent = (start + 1) + (end > start + 1 ? '~' + end : '') + ' / ' + deck.cards.length;
+  var box = $('tiles'); box.textContent = '';
+  page.forEach(function(c, j){
+    c.up = false;
+    var t = el('div', 'tile');
+    var f = el('button', 'flip'); f.type = 'button'; f.dataset.j = j;
+    var inner = el('span', 'flip-in');
+    var front = el('span', 'face front'), back = el('span', 'face back');
+    front.appendChild(el('span', 'no', j + 1));
+    var cw = el('span', 'cw', c.w); cw.style.setProperty('--len', Math.max(c.w.length, 5));
+    front.appendChild(cw); front.appendChild(el('span', 'hint', '눌러서 뜻 보기'));
+    back.appendChild(el('span', 'cw', c.w)); back.appendChild(el('span', 'cm', c.m));
+    if (deck.mode === 'notes') back.appendChild(el('span', 'hint', c.n + '번 틀린 단어'));
+    inner.appendChild(front); inner.appendChild(back); f.appendChild(inner);
+    var tools = el('div', 'tile-tools');
+    var say = el('button', 'say'); say.type = 'button'; say.dataset.j = j; say.setAttribute('aria-label', c.w + ' 다시 듣기');
+    say.innerHTML = '<svg aria-hidden="true"><use href="#spk"/></svg>';
+    tools.appendChild(say);
+    if (deck.mode === 'notes'){
+      var fg = el('button', 'forget'); fg.type = 'button'; fg.dataset.j = j;
+      tools.appendChild(fg);
+    }
+    t.appendChild(f); t.appendChild(tools); box.appendChild(t);
+    paintTile(j);
+  });
+  $('cardPrev').disabled = start === 0;
+  $('cardNext').textContent = end >= deck.cards.length ? '다 봤어요' : '다음';
 }
-function flipCard(){
-  if (!deck) return;
-  setFlip(!deck.flipped);
-  if (deck.flipped) speak(deck.cards[deck.pos].w);
+function paintTile(j){
+  var c = deck.cards[deck.pos + j], t = $('tiles').children[j];
+  var f = t.querySelector('.flip'), fg = t.querySelector('.forget');
+  f.setAttribute('aria-pressed', String(!!c.up));
+  f.setAttribute('aria-label', c.up ? c.w + ', 뜻: ' + c.m : '영어 단어 ' + c.w + '. 눌러서 뜻 보기');
+  if (fg){
+    fg.setAttribute('aria-pressed', String(!!c.gone));
+    fg.textContent = c.gone ? '지웠어요 · 되돌리기' : '외웠어요 · 지우기';
+    fg.setAttribute('aria-label', c.w + (c.gone ? ' 오답에서 지웠어요. 되돌리기' : ' 다 외웠어요. 오답에서 지우기'));
+  }
 }
-function paintForget(){
-  var c = deck.cards[deck.pos], b = $('cardForget');
-  b.setAttribute('aria-pressed', String(!!c.gone));
-  b.textContent = c.gone ? '지웠어요 · 되돌리기' : '다 외웠어요 · 오답에서 지우기';
+function flipTile(j){
+  var c = deck && deck.cards[deck.pos + j];
+  if (!c || j >= PER) return;
+  c.up = !c.up; paintTile(j);
+  if (c.up) speak(c.w);
 }
-function toggleForget(){
-  var c = deck.cards[deck.pos];
+function toggleForget(j){
+  var c = deck.cards[deck.pos + j];
   if (c.gone){ saved.wrong[c.w] = c.n; c.gone = false; }
   else { delete saved.wrong[c.w]; c.gone = true; }
-  persist(); paintForget();
+  persist(); paintTile(j);
 }
 function nextCard(){
   if (!deck) return;
-  if (deck.pos < deck.cards.length - 1){ deck.pos++; renderCard(); }
+  if (deck.pos + PER < deck.cards.length){ deck.pos += PER; renderPage(); scrollTop(); }
   else finishCards();
 }
 function prevCard(){
-  if (deck && deck.pos > 0){ deck.pos--; renderCard(); }
+  if (deck && deck.pos > 0){ deck.pos = Math.max(0, deck.pos - PER); renderPage(); scrollTop(); }
 }
+function scrollTop(){ try { window.scrollTo(0,0); } catch(e){} }
 function finishCards(){
   if (synth) { try { synth.cancel(); } catch(e){} }
   var d = deck, gone = d.cards.filter(function(c){ return c.gone; }).length, left = d.cards.length - gone;
@@ -464,9 +490,13 @@ $('counts').addEventListener('click', function(e){
   startCards(shuffle(SETS[key].slice()).slice(0, +b.dataset.n).map(function(x){ return {w:x.w, m:x.m, i:x.i, key:key, n:0, gone:false}; }),
     'level', labelOf(key) + ' · 외우기', key);
 });
-$('flip').addEventListener('click', flipCard);
-$('cardListen').addEventListener('click', function(){ if (deck) speak(deck.cards[deck.pos].w); });
-$('cardForget').addEventListener('click', toggleForget);
+$('tiles').addEventListener('click', function(e){
+  var b = e.target.closest('button'); if (!b || !deck) return;
+  var j = +b.dataset.j, c = deck.cards[deck.pos + j]; if (!c) return;
+  if (b.classList.contains('flip')) flipTile(j);
+  else if (b.classList.contains('say')) speak(c.w);
+  else if (b.classList.contains('forget')) toggleForget(j);
+});
 $('cardPrev').addEventListener('click', prevCard);
 $('cardNext').addEventListener('click', nextCard);
 $('cardsQuit').addEventListener('click', goHome);
@@ -499,11 +529,9 @@ $('sfxOff').addEventListener('click', function(){ saved.sfx = false; persist(); 
 document.addEventListener('keydown', function(e){
   if (e.metaKey || e.ctrlKey || e.altKey) return;
   if (screen === 'cards' && deck){
-    var onBtn = e.target && e.target.tagName === 'BUTTON';
-    if ((e.key === ' ' || e.key === 'Enter') && !onBtn){ flipCard(); e.preventDefault(); }
+    if (e.key >= '1' && e.key <= String(PER)){ flipTile(+e.key - 1); e.preventDefault(); }
     else if (e.key === 'ArrowRight'){ nextCard(); e.preventDefault(); }
     else if (e.key === 'ArrowLeft'){ prevCard(); e.preventDefault(); }
-    else if (e.key === 'r' || e.key === 'R'){ speak(deck.cards[deck.pos].w); }
     return;
   }
   if (screen !== 'play' || !game) return;

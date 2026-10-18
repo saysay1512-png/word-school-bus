@@ -1,6 +1,6 @@
 // 오프라인에서도 열리도록 앱 파일을 저장해 둡니다.
 // 파일을 고친 뒤에는 아래 버전을 올려 주세요 (예: v1 -> v2). 그래야 설치된 앱이 새 파일을 받습니다.
-const CACHE = 'wordbus-v2';
+const CACHE = 'wordbus-v3';
 const SHELL = ['./', 'index.html', 'style.css', 'words.js', 'app.js', 'manifest.webmanifest',
   'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/apple-touch-icon.png'];
 
